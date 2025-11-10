@@ -457,23 +457,13 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
         `🎉 Tabriklaymiz! Yulduzlar bashorati uchun to'lov muvaffaqiyatli amalga oshirildi!\n\n` +
         `⏰ Obuna tugash muddati: ${subscriptionEndDate.getDate().toString().padStart(2, '0')}.${(subscriptionEndDate.getMonth() + 1).toString().padStart(2, '0')}.${subscriptionEndDate.getFullYear()}\n\n`;
 
-      messageText += `Quyidagi havola orqali kanalga kirishingiz mumkin:`;
-
-      // if (fiscalQr) {
-      //   messageText += `\n\n📋 To'lov cheki QR kodi mavjud. Chekni ko'rish uchun quyidagi tugmani bosing.`;
-      // }
-
-      await UserModel.updateOne(
-        { telegramId: telegramId },
-        { $set: { subscribedTo: serviceName } },
-      );
-
-      const user1 = await UserModel.findOne({
-        telegramId: telegramId,
-      });
-
-      // @ts-ignore
-      logger.info(`User updated with subscribedTo: ${user1.subscribedTo}`);
+      if (wasKickedOut) {
+        messageText +=
+          `ℹ️ Sizning avvalgi bloklanishingiz bekor qilindi. ` +
+          `Quyidagi havola orqali kanalga qayta kirishingiz mumkin:`;
+      } else {
+        messageText += `Quyidagi havola orqali kanalga kirishingiz mumkin:`;
+      }
 
       await this.bot.api.sendMessage(telegramId, messageText, {
         reply_markup: keyboard,
@@ -1103,7 +1093,7 @@ ${expirationLabel} ${subscriptionEndDate}`;
             .text('🔙 Asosiy menyu', 'main_menu');
 
           await ctx.editMessageText(
-            '⚠️ Siz allaqachon faol obunaga egasiz. Obuna holatini tekshirish uchun quyidagi tugmani bosing:',
+            '⚠️ Siz allaqon faol obunaga egasiz. Obuna holatini tekshirish uchun quyidagi tugmani bosing:',
             { reply_markup: keyboard },
           );
           return;
@@ -1542,13 +1532,13 @@ ${expirationLabel} ${subscriptionEndDate}`;
   private getAlreadyPaidMessage(provider?: string): string {
     switch (provider) {
       case 'click':
-        return "✅ Kechirasiz, sizda allaqachon faol obuna mavjud! Siz Click orqali to'lov qilgansiz. Obuna muddati tugagach qayta urinib ko'ring.";
+        return "✅ Kechirasiz, sizda allaqon faol obuna mavjud! Siz Click orqali to'lov qilgansiz. Obuna muddati tugagach qayta urinib ko'ring.";
       case 'payme':
-        return "✅ Kechirasiz, sizda allaqachon faol obuna mavjud! Siz Payme orqali to'lov qilgansiz. Obuna muddati tugagach qayta urinib ko'ring.";
+        return "✅ Kechirasiz, sizda allaqon faol obuna mavjud! Siz Payme orqali to'lov qilgansiz. Obuna muddati tugagach qayta urinib ko'ring.";
       case 'uzcard':
-        return "✅ Kechirasiz, sizda allaqchon faol obuna mavjud! Siz Uzcard orqali to'lov qilgansiz. Obuna muddati tugagach qayta urinib ko'ring.";
+        return "✅ Kechirasiz, sizda allaqon faol obuna mavjud! Siz Uzcard orqali to'lov qilgansiz. Obuna muddati tugagach qayta urinib ko'ring.";
       default:
-        return "✅ Kechirasiz, sizda allaqchon faol obuna mavjud! Obuna muddati tugagach qayta to'lov qilishingiz mumkin.";
+        return "✅ Kechirasiz, sizda allaqon faol obuna mavjud! Obuna muddati tugagach qayta to'lov qilishingiz mumkin.";
     }
   }
 
@@ -1869,23 +1859,35 @@ ${expirationLabel} ${subscriptionEndDate}`;
 
     //
 
+    const since24 = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
     const [
       totalStarts,
       totalFreeTrialClicks,
       totalTermsOpens,
       totalUzcardOpens,
+      startsLast24,
+      freeTrialLast24,
+      termsLast24,
+      uzcardLast24,
     ] = await Promise.all([
       BotInteractionStatsModel.countDocuments({ started: true }),
       BotInteractionStatsModel.countDocuments({ clickedFreeTrial: true }),
       BotInteractionStatsModel.countDocuments({ openedTerms: true }),
       BotInteractionStatsModel.countDocuments({ openedUzcard: true }),
+
+      // Last 24 hours (use updatedAt to capture when the flag was set)
+      BotInteractionStatsModel.countDocuments({ started: true, updatedAt: { $gte: since24 } }),
+      BotInteractionStatsModel.countDocuments({ clickedFreeTrial: true, updatedAt: { $gte: since24 } }),
+      BotInteractionStatsModel.countDocuments({ openedTerms: true, updatedAt: { $gte: since24 } }),
+      BotInteractionStatsModel.countDocuments({ openedUzcard: true, updatedAt: { $gte: since24 } }),
     ]);
 
     const statsMessage = `📊 <b>Bot statistikasi</b>: \n\n` +
       `👥 Umumiy foydalanuvchilar: ${totalUsers} \n` +
       `✅ Umumiy aktiv foydalanuvchilar: ${activeUsers} \n` +
       `🆕 Bugun botga start berganlar: ${newUsersToday} \n` +
-      `💸 Bugun kanalga qo'shilgan foydalanuvchilar: ${newSubscribersToday} \n` +
+      `💸 Bugun kanalga qo'shilgan foydalanuqlar: ${newSubscribersToday} \n` +
       `📉 Obunasi tugaganlar: ${expiredSubscriptions} \n` +
       `⏳ Obunasi 3 kun ichida tugaydiganlar: ${expiringIn3Days} \n` +
       `🚫 Hech qachon obuna bo'lmaganlar: ${neverSubscribed} \n\n` +
@@ -1895,6 +1897,12 @@ ${expirationLabel} ${subscriptionEndDate}`;
       `🎁 Bepul sinov tugmasini bosganlar: ${totalFreeTrialClicks} \n` +
       `📄 Foydalanish shartlarini ochganlar: ${totalTermsOpens} \n` +
       `💳 Uzcard/Humo havolasini ochganlar: ${totalUzcardOpens} \n\n` +
+
+      `📈 <b>Funnel (oxirgi 24 soat)</b>: \n\n` +
+      `▶️ /start (24 soat): ${startsLast24} \n` +
+      `🎁 Bepul sinov (24 soat): ${freeTrialLast24} \n` +
+      `📄 Shartlar ochish (24 soat): ${termsLast24} \n` +
+      `💳 Uzcard/Humo ochish (24 soat): ${uzcardLast24} \n\n` +
 
       `📊 <b>Avtomatik to'lov statistikasi (bugun)</b>: \n\n` +
       `✅ Karta qo'shganlar: ${completedSubscription} \n\n` +
