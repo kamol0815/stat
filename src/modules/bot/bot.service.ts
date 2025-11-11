@@ -50,7 +50,7 @@ export class BotService implements OnModuleInit, OnModuleDestroy {
   private subscriptionService: SubscriptionService;
   private subscriptionMonitorService: SubscriptionMonitorService;
   private subscriptionChecker: SubscriptionChecker;
-  private readonly ADMIN_IDS = [1487957834, 7554617589, 85939027, 2022496528];
+  private readonly ADMIN_IDS = [1487957834, 7554617589, 85939027, 2022496528, 7789445876, 319324337, 1083408];
   private readonly subscriptionTermsLink: string;
   private introVideoBuffer?: Buffer;
   private introVideoFilename?: string;
